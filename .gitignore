@@ -1,17 +1,31 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 build/
 dist/
 wheels/
 *.egg-info
+*.log
 
 # Environment variables
 .env
 
 # Virtual environments
 .venv
+venv/
+env/
 
 # Agent-related and tool instructions
 AGENTS.md
 CLAUDE.md
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
