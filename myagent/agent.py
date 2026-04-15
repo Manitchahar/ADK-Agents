@@ -61,7 +61,13 @@ root_agent = Agent(
     ),
     tools=[PreloadMemoryTool(), *mcp_tools],
     after_agent_callback=_save_session_to_memory,
-    generate_content_config=types.GenerateContentConfig(),
+    generate_content_config=types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(
+            thinking_level ='minimal',
+    
+            include_thoughts=False,
+        ),
+    ),
 )
 
 app = App(
