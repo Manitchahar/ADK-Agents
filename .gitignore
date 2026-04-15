@@ -16,6 +16,12 @@ wheels/
 # Environment variables
 .env
 
+# Local runtime state
+.adk/
+todo.db
+*.db-shm
+*.db-wal
+
 # Virtual environments
 .venv
 venv/
