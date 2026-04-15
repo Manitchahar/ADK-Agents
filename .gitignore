@@ -18,6 +18,7 @@ wheels/
 
 # Local runtime state
 .adk/
+SS/
 todo.db
 *.db-shm
 *.db-wal
