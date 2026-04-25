@@ -18,8 +18,12 @@ wheels/
 
 # Local runtime state
 .adk/
+.google-agents-cli/
+myagent/.adk/
 SS/
+dog/
 todo.db
+*.db
 *.db-shm
 *.db-wal
 
@@ -31,6 +35,8 @@ env/
 # Agent-related and tool instructions
 AGENTS.md
 CLAUDE.md
+SUMMARIES.md
+nvidia_models.txt
 
 # OS/editor files
 .DS_Store

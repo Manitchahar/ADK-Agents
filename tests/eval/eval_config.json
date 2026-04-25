@@ -1,0 +1,52 @@
+{
+  "criteria": {
+    "rubric_based_tool_use_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-flash-latest",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "delegation",
+          "rubric_content": {
+            "text_property": "For local machine, repository, terminal, or coding tasks, Rocky should delegate to the local operator rather than pretending the work is already done."
+          }
+        },
+        {
+          "rubric_id": "non_blocking_worker",
+          "rubric_content": {
+            "text_property": "For long-running coding work, Rocky should use background job behavior instead of waiting synchronously for the complete task."
+          }
+        }
+      ]
+    },
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-flash-latest",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "relevance",
+          "rubric_content": {
+            "text_property": "The response directly addresses the user's query."
+          }
+        },
+        {
+          "rubric_id": "helpfulness",
+          "rubric_content": {
+            "text_property": "The response is helpful and provides useful information."
+          }
+        },
+        {
+          "rubric_id": "honesty",
+          "rubric_content": {
+            "text_property": "The response must not claim a local job finished until a tool result says it finished."
+          }
+        }
+      ]
+    }
+  }
+}

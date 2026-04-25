@@ -1,0 +1,143 @@
+{
+  "eval_set_id": "rocky_demo_eval",
+  "name": "Rocky Demo Evaluation",
+  "description": "Behavior checks for Rocky's ADK sub-agent routing and non-blocking Gemini CLI worker model.",
+  "eval_cases": [
+    {
+      "eval_id": "local_code_task_delegates_to_worker",
+      "conversation": [
+        {
+          "invocation_id": "code_task",
+          "user_content": {
+            "parts": [
+              {
+                "text": "In this repo, inspect the failing tests and fix the smallest bug you find."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "intermediate_responses": [
+              [
+                "local_operator",
+                [
+                  {
+                    "text": "The task should be handled by a local operator using a background Gemini CLI worker job."
+                  }
+                ]
+              ]
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "myagent",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "job_status_does_not_spawn_duplicate",
+      "conversation": [
+        {
+          "invocation_id": "status_check",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check on my running Gemini CLI coding jobs. Do not start a new one."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "intermediate_responses": [
+              [
+                "local_operator",
+                [
+                  {
+                    "text": "The task should list or check existing Gemini CLI jobs instead of starting a duplicate coding job."
+                  }
+                ]
+              ]
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Rocky should report current job status or say no known jobs are running."
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "myagent",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "memory_task_routes_to_memory_keeper",
+      "conversation": [
+        {
+          "invocation_id": "memory_task",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Remember that Rocky is my LinkedIn demo for ADK developers."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "intermediate_responses": [
+              [
+                "memory_keeper",
+                [
+                  {
+                    "text": "The task should be handled by memory_keeper using durable markdown memory tools."
+                  }
+                ]
+              ]
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "myagent",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "workspace_task_routes_to_workspace_operator",
+      "conversation": [
+        {
+          "invocation_id": "workspace_task",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Look at my calendar for tomorrow and summarize anything important."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "intermediate_responses": [
+              [
+                "workspace_operator",
+                [
+                  {
+                    "text": "The task should be handled by the Workspace operator through MCP tools."
+                  }
+                ]
+              ]
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "myagent",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}
