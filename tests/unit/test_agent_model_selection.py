@@ -26,12 +26,26 @@ def test_root_model_gemini_fallback_strips_litellm_prefix(monkeypatch):
     assert model.model == "gemini-2.5-flash"
 
 
+def test_search_model_uses_gemini_for_google_search(monkeypatch):
+    monkeypatch.delenv("HERMES_SEARCH_MODEL", raising=False)
+
+    model = agent_mod._search_model()
+
+    assert isinstance(model, Gemini)
+    assert model.model == "gemini-flash-latest"
+
+
 def test_root_agent_uses_specialist_subagents():
     sub_agents = {
         sub_agent.name: sub_agent for sub_agent in agent_mod.root_agent.sub_agents
     }
 
-    assert {"local_operator", "workspace_operator", "memory_keeper"} <= set(sub_agents)
+    assert {
+        "local_operator",
+        "workspace_operator",
+        "memory_keeper",
+        "search_operator",
+    } <= set(sub_agents)
 
     root_tool_names = {
         getattr(tool, "name", type(tool).__name__)
@@ -45,13 +59,19 @@ def test_root_agent_uses_specialist_subagents():
         getattr(tool, "name", type(tool).__name__)
         for tool in sub_agents["memory_keeper"].tools
     }
+    search_tool_names = {
+        getattr(tool, "name", type(tool).__name__)
+        for tool in sub_agents["search_operator"].tools
+    }
 
     assert "run_gemini_cli" not in root_tool_names
+    assert "google_search" not in root_tool_names
     assert {
         "run_gemini_cli",
         "check_gemini_cli_job",
         "list_gemini_cli_jobs",
         "cancel_gemini_cli_job",
+        "collect_gemini_cli_job_notifications",
     } <= local_tool_names
     assert {
         "remember_memory",
@@ -59,3 +79,4 @@ def test_root_agent_uses_specialist_subagents():
         "list_memory_topics",
         "forget_memory",
     } <= memory_tool_names
+    assert {"google_search"} <= search_tool_names

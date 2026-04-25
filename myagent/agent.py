@@ -4,6 +4,7 @@ from google.adk.agents import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
 from google.adk.models.llm_response import LlmResponse
+from google.adk.tools import google_search
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
 from google.adk.tools.preload_memory_tool import PreloadMemoryTool
@@ -18,6 +19,8 @@ from .tools.gemini_cli import (
     gemini_cli_list_tool,
     gemini_cli_notifications_tool,
     gemini_cli_tool,
+    mark_gemini_cli_job_notifications_reported,
+    peek_gemini_cli_job_notifications,
 )
 from .tools.memory import (
     forget_memory_tool,
@@ -63,6 +66,7 @@ mcp_tools = [
 ]
 
 _LAST_TOOL_SUMMARY_KEY = "rocky:last_tool_result_summary"
+_PENDING_JOB_NOTIFICATION_IDS_KEY = "rocky:pending_job_notification_ids"
 
 
 def _assistant_content(text: str) -> types.Content:
@@ -108,6 +112,58 @@ async def _recover_model_error(callback_context, llm_request, error):
     )
 
 
+def _format_job_notifications(notifications: list[dict]) -> str:
+    lines = []
+    for notification in notifications:
+        response = str(notification.get("response_preview") or "").strip()
+        if len(response) > 240:
+            response = f"{response[:240]}..."
+        detail = f"job {notification['job_id']} finished with {notification['status']}"
+        if response:
+            detail = f"{detail}: {response}"
+        lines.append(f"- {detail}")
+    return "\n".join(lines)
+
+
+async def _inject_job_notifications(callback_context, llm_request):
+    notifications = peek_gemini_cli_job_notifications()
+    if not notifications:
+        return None
+
+    job_ids = [str(notification["job_id"]) for notification in notifications]
+    callback_context.state[_PENDING_JOB_NOTIFICATION_IDS_KEY] = job_ids
+    llm_request.append_instructions(
+        [
+            "Pending Gemini CLI job notifications for this turn:\n"
+            f"{_format_job_notifications(notifications)}\n\n"
+            "Your next response must be plain text, not a tool call and not a "
+            "transfer. Briefly mention these completed background jobs first, "
+            "including each job id, then answer the user's current message if "
+            "you can do so directly. If the current message needs tools, say "
+            "you can continue with it on the next turn after this status note."
+        ]
+    )
+    return None
+
+
+async def _mark_injected_job_notifications_reported(callback_context, llm_response):
+    job_ids = callback_context.state.get(_PENDING_JOB_NOTIFICATION_IDS_KEY)
+    if not job_ids:
+        return None
+
+    content = getattr(llm_response, "content", None)
+    text = "\n".join(
+        part.text or "" for part in getattr(content, "parts", []) if part.text
+    )
+    reported_ids = [job_id for job_id in job_ids if job_id in text]
+    if reported_ids:
+        mark_gemini_cli_job_notifications_reported(reported_ids)
+        callback_context.state[_PENDING_JOB_NOTIFICATION_IDS_KEY] = [
+            job_id for job_id in job_ids if job_id not in reported_ids
+        ]
+    return None
+
+
 async def _save_session_to_memory(callback_context):
     invocation_context = getattr(callback_context, "_invocation_context", None)
     if invocation_context is None or invocation_context.memory_service is None:
@@ -141,6 +197,10 @@ def _root_model():
         if "GOOGLE_API_KEY" in os.environ:
             os.environ["GEMINI_API_KEY"] = os.environ["GOOGLE_API_KEY"]
     return SerializableLiteLlm(model=model)
+
+
+def _search_model():
+    return Gemini(model=os.environ.get("HERMES_SEARCH_MODEL", "gemini-flash-latest"))
 
 
 GEMINI_CLI_WORKFLOW = """You have exactly five Gemini CLI job tools. Use these names verbatim, never invent variations:
@@ -242,6 +302,18 @@ context, handle it directly through the wiki tools.
 """
 
 
+SEARCH_OPERATOR_PROMPT = """You are `search_operator`, Rocky's specialist for web search and current public facts.
+
+Use the built-in `google_search` grounding tool when the user asks about recent
+events, current information, public documentation, product pages, releases,
+prices, comparisons, or anything likely to have changed after model training.
+
+Prefer concise answers with source attribution. If a question can be answered
+from stable memory or local project files, do not use web search; Rocky should
+route those tasks to memory_keeper or local_operator instead.
+"""
+
+
 ROCKY_SYSTEM_PROMPT = """You are Rocky, a Google ADK orchestrator inspired by Max, Hermes Agent, OpenClaw, and Hermes-style local agents.
 You are the fast supervisor/router, not the heavy worker.
 
@@ -253,6 +325,8 @@ Delegate instead of doing everything yourself:
 - `workspace_operator` handles Google Workspace tasks through MCP.
 - `memory_keeper` handles Claw-style markdown memory, recall, and stable
   user/project context.
+- `search_operator` handles web search and current public facts using built-in
+  Google Search grounding.
 
 Keep your own turns responsive. For long-running coding or inspection work,
 transfer to `local_operator`; it will start a Gemini CLI background job and
@@ -293,6 +367,8 @@ local_operator = Agent(
         gemini_cli_notifications_tool,
     ],
     on_model_error_callback=_recover_model_error,
+    before_model_callback=_inject_job_notifications,
+    after_model_callback=_mark_injected_job_notifications_reported,
     after_tool_callback=_remember_tool_result,
     on_tool_error_callback=_remember_tool_error,
     after_agent_callback=_save_session_to_memory,
@@ -305,6 +381,8 @@ workspace_operator = Agent(
     instruction=WORKSPACE_OPERATOR_PROMPT,
     tools=mcp_tools,
     on_model_error_callback=_recover_model_error,
+    before_model_callback=_inject_job_notifications,
+    after_model_callback=_mark_injected_job_notifications_reported,
     after_tool_callback=_remember_tool_result,
     on_tool_error_callback=_remember_tool_error,
     after_agent_callback=_save_session_to_memory,
@@ -323,6 +401,22 @@ memory_keeper = Agent(
         forget_memory_tool,
     ],
     on_model_error_callback=_recover_model_error,
+    before_model_callback=_inject_job_notifications,
+    after_model_callback=_mark_injected_job_notifications_reported,
+    after_tool_callback=_remember_tool_result,
+    on_tool_error_callback=_remember_tool_error,
+    after_agent_callback=_save_session_to_memory,
+)
+
+search_operator = Agent(
+    model=_search_model(),
+    name="search_operator",
+    description="Handles web search and current public facts through built-in Google Search grounding.",
+    instruction=SEARCH_OPERATOR_PROMPT,
+    tools=[google_search],
+    on_model_error_callback=_recover_model_error,
+    before_model_callback=_inject_job_notifications,
+    after_model_callback=_mark_injected_job_notifications_reported,
     after_tool_callback=_remember_tool_result,
     on_tool_error_callback=_remember_tool_error,
     after_agent_callback=_save_session_to_memory,
@@ -331,11 +425,13 @@ memory_keeper = Agent(
 root_agent = Agent(
     model=_root_model(),
     name="rocky",
-    description="Rocky: a responsive ADK supervisor with specialist local, Workspace, and memory agents.",
+    description="Rocky: a responsive ADK supervisor with specialist local, Workspace, memory, and search agents.",
     instruction=ROCKY_SYSTEM_PROMPT,
     tools=[PreloadMemoryTool(), gemini_cli_notifications_tool],
-    sub_agents=[local_operator, workspace_operator, memory_keeper],
+    sub_agents=[local_operator, workspace_operator, memory_keeper, search_operator],
     on_model_error_callback=_recover_model_error,
+    before_model_callback=_inject_job_notifications,
+    after_model_callback=_mark_injected_job_notifications_reported,
     after_tool_callback=_remember_tool_result,
     on_tool_error_callback=_remember_tool_error,
     after_agent_callback=_save_session_to_memory,

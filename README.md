@@ -40,6 +40,15 @@ The `memory_keeper` sub-agent stores durable facts in markdown wiki pages under
 `~/.rocky/wiki` by default, giving the prototype a Claw/Hermes-style persistent
 memory feel without requiring external infrastructure.
 
+Ask Rocky for current public information:
+
+```text
+Search what changed in the latest Google ADK release and give me the highlights.
+```
+
+Rocky routes current-events and public web questions to `search_operator`, which
+uses ADK's built-in Google Search grounding tool and a Gemini search model.
+
 ## Structure
 
 - `myagent/agent.py`: defines Rocky and its specialist sub-agents.
@@ -65,6 +74,8 @@ The repo currently exposes a `root_agent` named `rocky` with:
 - `workspace_operator` for Google Workspace MCP tools
 - `memory_keeper` for Claw-style markdown wiki memory over stable user/project
   context
+- `search_operator` for current public facts through ADK's built-in Google
+  Search grounding tool
 - an exported ADK `App` wrapper for app-level runtime features
 - memory preload plus automatic session-to-memory ingestion when a memory
   backend is configured
@@ -79,6 +90,7 @@ The repo currently exposes a `root_agent` named `rocky` with:
 | `LongRunningFunctionTool` | Gemini CLI coding tasks start in the background instead of blocking the chat turn. |
 | Function tools | Job check/list/cancel tools expose worker control to the agent. |
 | MCP toolsets | Google Workspace tools are wired through ADK MCP support. |
+| Built-in Google Search | `search_operator` uses ADK's `google_search` grounding tool for current web facts. |
 | Session state callbacks | Tool results are summarized into namespaced `rocky:*` state keys. |
 | Memory tools | `memory_keeper` can remember, recall, list, and forget markdown wiki entries. |
 | Memory hooks | ADK memory preload/save paths are also present for longer-term context. |
@@ -87,7 +99,7 @@ The repo currently exposes a `root_agent` named `rocky` with:
 
 ## Gemini CLI worker controls
 
-Rocky's local operator has four job tools:
+Rocky's local operator has five job tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -95,12 +107,14 @@ Rocky's local operator has four job tools:
 | `check_gemini_cli_job` | Poll a job once without blocking the root agent. |
 | `list_gemini_cli_jobs` | Show active/recent jobs with status and prompt previews. |
 | `cancel_gemini_cli_job` | Request cancellation for a queued/running worker job. |
+| `collect_gemini_cli_job_notifications` | Report newly finished background jobs on a later turn. |
 
 Useful environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `HERMES_ROOT_MODEL` | first NVIDIA tool-calling model | Main/sub-agent model override. |
+| `HERMES_SEARCH_MODEL` | `gemini-flash-latest` | Gemini model used by `search_operator` for Google Search grounding. |
 | `HERMES_GEMINI_FALLBACK_MODEL` | `gemma-4-31b-it` | Fallback when LiteLLM is unavailable. |
 | `GEMINI_CLI_MODEL` | `gemini-2.5-pro` | Gemini CLI worker model. |
 | `GEMINI_CLI_TIMEOUT` | `300` | Per-worker timeout in seconds. |

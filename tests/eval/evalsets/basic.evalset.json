@@ -76,6 +76,38 @@
       }
     },
     {
+      "eval_id": "web_search_routes_to_search_operator",
+      "conversation": [
+        {
+          "invocation_id": "search_task",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Search the web for the latest Google ADK release highlights and summarize the important changes."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "intermediate_responses": [
+              [
+                "search_operator",
+                [
+                  {
+                    "text": "The task should be handled by search_operator using built-in Google Search grounding for current public information."
+                  }
+                ]
+              ]
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "myagent",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
       "eval_id": "memory_task_routes_to_memory_keeper",
       "conversation": [
         {

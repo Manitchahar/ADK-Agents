@@ -369,13 +369,7 @@ async def list_gemini_cli_jobs(include_finished: bool = True) -> dict[str, Any]:
     return {"status": "ok", "count": len(jobs), "jobs": jobs}
 
 
-async def collect_gemini_cli_job_notifications() -> dict[str, Any]:
-    """Return newly finished Gemini CLI jobs and mark them as notified.
-
-    This is a lightweight helper for the supervisor agent. It lets Rocky mention
-    completed background work at the start of a later user turn, even if the
-    user has started talking about something else.
-    """
+def _pending_gemini_cli_job_notifications(mark_notified: bool) -> list[dict[str, Any]]:
     _gc_jobs()
     notifications: list[dict[str, Any]] = []
     for job_id, job in sorted(_JOBS.items(), key=lambda item: item[1]["started_at"]):
@@ -395,7 +389,29 @@ async def collect_gemini_cli_job_notifications() -> dict[str, Any]:
                 ),
             }
         )
-        job["notified"] = True
+        if mark_notified:
+            job["notified"] = True
+    return notifications
+
+
+def peek_gemini_cli_job_notifications() -> list[dict[str, Any]]:
+    return _pending_gemini_cli_job_notifications(mark_notified=False)
+
+
+def mark_gemini_cli_job_notifications_reported(job_ids: list[str]) -> None:
+    for job_id in job_ids:
+        if job_id in _JOBS:
+            _JOBS[job_id]["notified"] = True
+
+
+async def collect_gemini_cli_job_notifications() -> dict[str, Any]:
+    """Return newly finished Gemini CLI jobs and mark them as notified.
+
+    This is a lightweight helper for the supervisor agent. It lets Rocky mention
+    completed background work at the start of a later user turn, even if the
+    user has started talking about something else.
+    """
+    notifications = _pending_gemini_cli_job_notifications(mark_notified=True)
     return {"status": "ok", "count": len(notifications), "notifications": notifications}
 
 
