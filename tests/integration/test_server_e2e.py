@@ -49,7 +49,7 @@ def start_server() -> subprocess.Popen[str]:
         sys.executable,
         "-m",
         "uvicorn",
-        "myagent.fast_api_app:app",
+        "tests.integration.stub_fast_api_app:app",
         "--host",
         "0.0.0.0",
         "--port",

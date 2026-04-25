@@ -12,7 +12,11 @@ from google.genai import types
 from mcp import StdioServerParameters
 from pydantic import Field
 
-from .model_fallbacks import NVIDIA_TOOL_CALL_MODELS
+from .model_fallbacks import (
+    GOOGLE_TOOL_CALL_MODELS,
+    NVIDIA_TOOL_CALL_MODELS,
+    OPENROUTER_LAST_RESORT_MODELS,
+)
 from .tools.gemini_cli import (
     gemini_cli_cancel_tool,
     gemini_cli_check_tool,
@@ -67,6 +71,7 @@ mcp_tools = [
 
 _LAST_TOOL_SUMMARY_KEY = "rocky:last_tool_result_summary"
 _PENDING_JOB_NOTIFICATION_IDS_KEY = "rocky:pending_job_notification_ids"
+_PENDING_JOB_NOTIFICATION_TEXT_KEY = "rocky:pending_job_notification_text"
 
 
 def _assistant_content(text: str) -> types.Content:
@@ -132,6 +137,9 @@ async def _inject_job_notifications(callback_context, llm_request):
 
     job_ids = [str(notification["job_id"]) for notification in notifications]
     callback_context.state[_PENDING_JOB_NOTIFICATION_IDS_KEY] = job_ids
+    callback_context.state[_PENDING_JOB_NOTIFICATION_TEXT_KEY] = (
+        _format_job_notifications(notifications)
+    )
     llm_request.append_instructions(
         [
             "Pending Gemini CLI job notifications for this turn:\n"
@@ -150,6 +158,9 @@ async def _mark_injected_job_notifications_reported(callback_context, llm_respon
     job_ids = callback_context.state.get(_PENDING_JOB_NOTIFICATION_IDS_KEY)
     if not job_ids:
         return None
+    notification_text = callback_context.state.get(_PENDING_JOB_NOTIFICATION_TEXT_KEY)
+    if not notification_text:
+        return None
 
     content = getattr(llm_response, "content", None)
     text = "\n".join(
@@ -158,10 +169,28 @@ async def _mark_injected_job_notifications_reported(callback_context, llm_respon
     reported_ids = [job_id for job_id in job_ids if job_id in text]
     if reported_ids:
         mark_gemini_cli_job_notifications_reported(reported_ids)
-        callback_context.state[_PENDING_JOB_NOTIFICATION_IDS_KEY] = [
-            job_id for job_id in job_ids if job_id not in reported_ids
-        ]
-    return None
+        remaining_ids = [job_id for job_id in job_ids if job_id not in reported_ids]
+        callback_context.state[_PENDING_JOB_NOTIFICATION_IDS_KEY] = remaining_ids
+        if not remaining_ids:
+            callback_context.state[_PENDING_JOB_NOTIFICATION_TEXT_KEY] = ""
+        return None
+
+    mark_gemini_cli_job_notifications_reported(job_ids)
+    callback_context.state[_PENDING_JOB_NOTIFICATION_IDS_KEY] = []
+    callback_context.state[_PENDING_JOB_NOTIFICATION_TEXT_KEY] = ""
+    if text.strip():
+        return LlmResponse(
+            content=_assistant_content(
+                f"Background job update:\n{notification_text}\n\n{text.strip()}"
+            )
+        )
+    return LlmResponse(
+        content=_assistant_content(
+            "Background job update:\n"
+            f"{notification_text}\n\n"
+            "I can continue with your current request on the next turn."
+        )
+    )
 
 
 async def _save_session_to_memory(callback_context):
@@ -176,27 +205,77 @@ async def _save_session_to_memory(callback_context):
 
 
 def _root_model():
-    model = os.environ.get(
-        "HERMES_ROOT_MODEL",
-        f"nvidia_nim/{NVIDIA_TOOL_CALL_MODELS[0]}",
-    )
-    if SerializableLiteLlm is None:
-        gemini_model = os.environ.get("HERMES_GEMINI_FALLBACK_MODEL", "gemma-4-31b-it")
-        if model.startswith("gemini/"):
-            gemini_model = model.removeprefix("gemini/")
-        return Gemini(model=gemini_model)
+    candidates = _root_model_candidates()
+    model = candidates[0]
+    _configure_model_environment(candidates)
 
-    if model.startswith("nvidia_nim/"):
+    if SerializableLiteLlm is None:
+        return Gemini(model=_first_gemini_candidate(candidates))
+
+    if model.startswith("gemini/") and len(candidates) == 1:
+        return Gemini(model=model.removeprefix("gemini/"))
+    lite_llm_kwargs: dict[str, object] = {
+        "fallbacks": list(candidates[1:]),
+        "drop_params": True,
+    }
+    return SerializableLiteLlm(model=model, **lite_llm_kwargs)
+
+
+def _has_env(*names: str) -> bool:
+    return any(os.environ.get(name) for name in names)
+
+
+def _split_model_env(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return ()
+    return tuple(model.strip() for model in value.split(",") if model.strip())
+
+
+def _dedupe(models: list[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(models))
+
+
+def _root_model_candidates() -> tuple[str, ...]:
+    explicit_model = os.environ.get("HERMES_ROOT_MODEL")
+    explicit_fallbacks = _split_model_env(os.environ.get("HERMES_ROOT_FALLBACK_MODELS"))
+    if explicit_model:
+        return _dedupe([explicit_model, *explicit_fallbacks])
+
+    candidates: list[str] = []
+    if _has_env("NVIDIA_NIM_API_KEY", "NVIDIA_API_KEY"):
+        candidates.extend(f"nvidia_nim/{model}" for model in NVIDIA_TOOL_CALL_MODELS)
+
+    if _has_env("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT"):
+        candidates.extend(f"gemini/{model}" for model in GOOGLE_TOOL_CALL_MODELS)
+
+    if _has_env("OPENROUTER_API_KEY"):
+        candidates.extend(OPENROUTER_LAST_RESORT_MODELS)
+
+    if not candidates:
+        candidates.append(
+            f"gemini/{os.environ.get('HERMES_GEMINI_FALLBACK_MODEL', 'gemini-2.5-flash')}"
+        )
+    return _dedupe(candidates)
+
+
+def _first_gemini_candidate(candidates: tuple[str, ...]) -> str:
+    for candidate in candidates:
+        if candidate.startswith("gemini/"):
+            return candidate.removeprefix("gemini/")
+    return os.environ.get("HERMES_GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
+
+
+def _configure_model_environment(candidates: tuple[str, ...]) -> None:
+    if any(model.startswith("nvidia_nim/") for model in candidates):
         os.environ.setdefault(
             "NVIDIA_NIM_API_BASE",
             "https://integrate.api.nvidia.com/v1",
         )
         if "NVIDIA_NIM_API_KEY" not in os.environ and "NVIDIA_API_KEY" in os.environ:
             os.environ["NVIDIA_NIM_API_KEY"] = os.environ["NVIDIA_API_KEY"]
-    if model.startswith("gemini/") and "GEMINI_API_KEY" not in os.environ:
-        if "GOOGLE_API_KEY" in os.environ:
+    if any(model.startswith("gemini/") for model in candidates):
+        if "GEMINI_API_KEY" not in os.environ and "GOOGLE_API_KEY" in os.environ:
             os.environ["GEMINI_API_KEY"] = os.environ["GOOGLE_API_KEY"]
-    return SerializableLiteLlm(model=model)
 
 
 def _search_model():

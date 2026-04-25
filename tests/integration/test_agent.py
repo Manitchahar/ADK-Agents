@@ -16,15 +16,18 @@ from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from pytest import MonkeyPatch
 
 from myagent.agent import root_agent
+from tests.integration.stub_model import StubModel
 
 
-def test_agent_stream() -> None:
+def test_agent_stream(monkeypatch: MonkeyPatch) -> None:
     """
     Integration test for the agent stream functionality.
     Tests that the agent returns valid streaming responses.
     """
+    monkeypatch.setattr(root_agent, "model", StubModel(model="stub"))
 
     session_service = InMemorySessionService()
 

@@ -65,9 +65,8 @@ uses ADK's built-in Google Search grounding tool and a Gemini search model.
 
 The repo currently exposes a `root_agent` named `rocky` with:
 
-- model selection via `HERMES_ROOT_MODEL`, defaulting to the first NVIDIA NIM
-  tool-calling model when LiteLLM is available and falling back to Gemma/Gemini
-  otherwise
+- provider-aware model selection via `HERMES_ROOT_MODEL`, NVIDIA NIM,
+  Gemini API, and OpenRouter fallbacks
 - a supervisor prompt that delegates instead of doing heavy work directly
 - `local_operator` for local machine, repository, terminal, and coding tasks via
   Gemini CLI background jobs
@@ -86,7 +85,7 @@ The repo currently exposes a `root_agent` named `rocky` with:
 
 | ADK feature | How Rocky uses it |
 | --- | --- |
-| Root + sub-agents | Rocky supervises `local_operator`, `workspace_operator`, and `memory_keeper`. |
+| Root + sub-agents | Rocky supervises `local_operator`, `workspace_operator`, `memory_keeper`, and `search_operator`. |
 | `LongRunningFunctionTool` | Gemini CLI coding tasks start in the background instead of blocking the chat turn. |
 | Function tools | Job check/list/cancel tools expose worker control to the agent. |
 | MCP toolsets | Google Workspace tools are wired through ADK MCP support. |
@@ -113,15 +112,32 @@ Useful environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HERMES_ROOT_MODEL` | first NVIDIA tool-calling model | Main/sub-agent model override. |
+| `HERMES_ROOT_MODEL` | auto provider stack | Main/sub-agent model override. |
+| `HERMES_ROOT_FALLBACK_MODELS` | empty | Comma-separated extra fallback models after an explicit root model. |
+| `NVIDIA_NIM_API_KEY` / `NVIDIA_API_KEY` | unset | Enables the primary NVIDIA NIM tool-calling stack. |
+| `NVIDIA_NIM_API_BASE` | `https://integrate.api.nvidia.com/v1` | NVIDIA NIM endpoint for LiteLLM. |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | unset | Enables Gemini API fallbacks for the root model and search model. |
+| `OPENROUTER_API_KEY` | unset | Enables OpenRouter as the last-resort fallback provider. |
 | `HERMES_SEARCH_MODEL` | `gemini-flash-latest` | Gemini model used by `search_operator` for Google Search grounding. |
-| `HERMES_GEMINI_FALLBACK_MODEL` | `gemma-4-31b-it` | Fallback when LiteLLM is unavailable. |
+| `HERMES_GEMINI_FALLBACK_MODEL` | `gemini-2.5-flash` | Native Gemini fallback when LiteLLM is unavailable. |
 | `GEMINI_CLI_MODEL` | `gemini-2.5-pro` | Gemini CLI worker model. |
 | `GEMINI_CLI_TIMEOUT` | `300` | Per-worker timeout in seconds. |
 | `GEMINI_CLI_MAX_WORKERS` | `4` | Maximum concurrent Gemini CLI workers. |
 | `HERMES_WORKSPACE_ROOT` | repo root | Default working directory for Gemini CLI jobs. |
 | `WORKSPACE_MCP_PATH` | `~/.gemini/extensions/google-workspace` | Workspace MCP server directory. |
 | `ROCKY_MEMORY_DIR` | `~/.rocky/wiki` | Markdown wiki directory for Claw-style memory. |
+
+Default root model order:
+
+| Order | Provider | Models |
+| --- | --- | --- |
+| 1 | NVIDIA NIM | `qwen/qwen3.5-397b-a17b`, then `nvidia/nemotron-3-super-120b-a12b`, then `moonshotai/kimi-k2-instruct-0905` |
+| 2 | Gemini API | `gemini-2.5-pro`, then Gemini 3 Flash preview, then Flash fallbacks |
+| 3 | OpenRouter | Kimi K2, Qwen3 Coder, GPT OSS, then OpenRouter free fallback |
+
+Mistral Small stays available in the NVIDIA list, but it is no longer first
+because Rocky needs stronger instruction following and tool-call orchestration at
+the supervisor layer.
 
 ## Run
 
