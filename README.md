@@ -116,6 +116,8 @@ Useful environment variables:
 | `HERMES_ROOT_FALLBACK_MODELS` | empty | Comma-separated extra fallback models after an explicit root model. |
 | `NVIDIA_NIM_API_KEY` / `NVIDIA_API_KEY` | unset | Enables the primary NVIDIA NIM tool-calling stack. |
 | `NVIDIA_NIM_API_BASE` | `https://integrate.api.nvidia.com/v1` | NVIDIA NIM endpoint for LiteLLM. |
+| `OPENCODE_API_KEY` | unset | Enables OpenCode Go (Pi model) for tool-calling. |
+| `OPENCODE_API_BASE` | `https://opencode.ai/zen/go/v1` | OpenCode Go endpoint for LiteLLM. |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | unset | Enables Gemini API fallbacks for the root model and search model. |
 | `OPENROUTER_API_KEY` | unset | Enables OpenRouter as the last-resort fallback provider. |
 | `HERMES_SEARCH_MODEL` | `gemini-flash-latest` | Gemini model used by `search_operator` for Google Search grounding. |
@@ -132,8 +134,9 @@ Default root model order:
 | Order | Provider | Models |
 | --- | --- | --- |
 | 1 | NVIDIA NIM | `qwen/qwen3.5-397b-a17b`, then `nvidia/nemotron-3-super-120b-a12b`, then `moonshotai/kimi-k2-instruct-0905` |
-| 2 | Gemini API | `gemini-2.5-pro`, then Gemini 3 Flash preview, then Flash fallbacks |
-| 3 | OpenRouter | Kimi K2, Qwen3 Coder, GPT OSS, then OpenRouter free fallback |
+| 2 | OpenCode Go (Pi) | `kimi-k2.6`, then `deepseek-v4-flash`, then `qwen3.5-397b-a17b` |
+| 3 | Gemini API | `gemini-2.5-pro`, then Gemini 3 Flash preview, then Flash fallbacks |
+| 4 | OpenRouter | Kimi K2, Qwen3 Coder, GPT OSS, then OpenRouter free fallback |
 
 Mistral Small stays available in the NVIDIA list, but it is no longer first
 because Rocky needs stronger instruction following and tool-call orchestration at
