@@ -16,6 +16,7 @@ from .model_fallbacks import (
     GOOGLE_TOOL_CALL_MODELS,
     NVIDIA_TOOL_CALL_MODELS,
     OPENROUTER_LAST_RESORT_MODELS,
+    PI_TOOL_CALL_MODELS,
 )
 from .tools.gemini_cli import (
     gemini_cli_cancel_tool,
@@ -245,6 +246,9 @@ def _root_model_candidates() -> tuple[str, ...]:
     if _has_env("NVIDIA_NIM_API_KEY", "NVIDIA_API_KEY"):
         candidates.extend(f"nvidia_nim/{model}" for model in NVIDIA_TOOL_CALL_MODELS)
 
+    if _has_env("OPENCODE_API_KEY"):
+        candidates.extend(f"opencode/{model}" for model in PI_TOOL_CALL_MODELS)
+
     if _has_env("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT"):
         candidates.extend(f"gemini/{model}" for model in GOOGLE_TOOL_CALL_MODELS)
 
@@ -273,6 +277,11 @@ def _configure_model_environment(candidates: tuple[str, ...]) -> None:
         )
         if "NVIDIA_NIM_API_KEY" not in os.environ and "NVIDIA_API_KEY" in os.environ:
             os.environ["NVIDIA_NIM_API_KEY"] = os.environ["NVIDIA_API_KEY"]
+    if any(model.startswith("opencode/") for model in candidates):
+        os.environ.setdefault(
+            "OPENCODE_API_BASE",
+            "https://opencode.ai/zen/go/v1",
+        )
     if any(model.startswith("gemini/") for model in candidates):
         if "GEMINI_API_KEY" not in os.environ and "GOOGLE_API_KEY" in os.environ:
             os.environ["GEMINI_API_KEY"] = os.environ["GOOGLE_API_KEY"]

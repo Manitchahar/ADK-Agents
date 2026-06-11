@@ -21,6 +21,15 @@ OPENROUTER_LAST_RESORT_MODELS = (
     "openrouter/free",
 )
 
+# Pi / OpenCode Go models (OpenAI-compatible API)
+PI_TOOL_CALL_MODELS = (
+    "kimi-k2.6",
+    "deepseek-v4-flash",
+    "qwen3.5-397b-a17b",
+)
+
+PI_WORKING_MODELS = PI_TOOL_CALL_MODELS
+
 # Ordered for multi-agent/tool orchestration quality. The top three are the
 # preferred NIM stack for Rocky:
 # 1. Qwen 3.5 397B: strongest general orchestrator/reasoner in the local list.
@@ -55,5 +64,5 @@ NVIDIA_WORKING_MODELS = NVIDIA_TOOL_CALL_MODELS + NVIDIA_CHAT_FALLBACK_MODELS
 
 TOOL_CALL_MODELS = GOOGLE_TOOL_CALL_MODELS + NVIDIA_TOOL_CALL_MODELS
 WORKING_MODELS = (
-    GOOGLE_WORKING_MODELS + NVIDIA_WORKING_MODELS + OPENROUTER_LAST_RESORT_MODELS
+    GOOGLE_WORKING_MODELS + NVIDIA_WORKING_MODELS + PI_WORKING_MODELS + OPENROUTER_LAST_RESORT_MODELS
 )
